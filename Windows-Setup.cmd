@@ -4,19 +4,29 @@ pushd "%~dp0"
 if errorlevel 1 goto folder_error
 echo Program folder: %CD%
 if not exist "follow.py" goto files_missing
-if not exist "requirements.txt" goto files_missing
-py -3 -c "import sys; assert sys.version_info >= (3,10)" >nul 2>&1
-if not errorlevel 1 goto use_py
+if not exist "requirements-windows.txt" goto files_missing
+py -3.12 -c "import sys; assert sys.version_info >= (3,10)" >nul 2>&1
+if not errorlevel 1 goto use_py312
+py -3.11 -c "import sys; assert sys.version_info >= (3,10)" >nul 2>&1
+if not errorlevel 1 goto use_py311
+py -3.10 -c "import sys; assert sys.version_info >= (3,10)" >nul 2>&1
+if not errorlevel 1 goto use_py310
 python -c "import sys; assert sys.version_info >= (3,10)" >nul 2>&1
 if errorlevel 1 goto python_missing
 python -m venv .venv
 goto created
-:use_py
-py -3 -m venv .venv
+:use_py312
+py -3.12 -m venv .venv
+goto created
+:use_py311
+py -3.11 -m venv .venv
+goto created
+:use_py310
+py -3.10 -m venv .venv
 :created
 if errorlevel 1 goto failed
 if not exist ".venv\Scripts\python.exe" goto failed
-".venv\Scripts\python.exe" -m pip install -r requirements.txt
+".venv\Scripts\python.exe" -m pip install -r requirements-windows.txt
 if errorlevel 1 goto failed
 ".venv\Scripts\python.exe" follow.py status
 if errorlevel 1 goto failed
@@ -33,7 +43,7 @@ echo Enable the Python launcher and/or Add python.exe to PATH during installatio
 echo Then close this window and run Windows-Setup.cmd again.
 goto failed
 :files_missing
-echo ERROR: follow.py or requirements.txt is missing.
+echo ERROR: follow.py or requirements-windows.txt is missing.
 echo Extract the entire ZIP into a folder. Do not run directly inside the ZIP viewer.
 goto failed
 :failed

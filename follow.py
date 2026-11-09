@@ -134,8 +134,9 @@ class WatchState:
         self.armed = False
 
 
-def switch_once(channel):
-    _, info = inventory()
+def switch_once(channel, info=None):
+    if info is None:
+        _, info = inventory()
     if info is None:
         raise RuntimeError("MX Master 3S is not connected to this computer")
     mouse = Mouse(info)
@@ -151,7 +152,8 @@ def switch_once(channel):
     raise RuntimeError("Mouse still enumerates here; switch is UNCONFIRMED")
 
 
-def watch(channel, dry_run, stop_event=None, pause_event=None, on_status=None):
+def watch(channel, dry_run, stop_event=None, pause_event=None, on_status=None,
+          local_name="Mac", local_channel=2, target_name="Windows", on_presence=None):
     state = WatchState()
     last_presence = None
     last_status = None
@@ -172,6 +174,8 @@ def watch(channel, dry_run, stop_event=None, pause_event=None, on_status=None):
                 continue
             keyboard, mouse = inventory()
             presence = (keyboard, mouse is not None)
+            if on_presence:
+                on_presence(*presence)
             if presence != last_presence:
                 LOG.info("Presence: OG80=%s, MX Master 3S=%s", *presence)
                 if not all(presence):
@@ -195,12 +199,15 @@ def watch(channel, dry_run, stop_event=None, pause_event=None, on_status=None):
             trigger = state.update(time.time(), keyboard, mouse is not None)
             if state.armed and not was_armed:
                 LOG.info("Armed: keyboard and mouse both present")
-            if state.armed:
-                report("armed", "监听就绪：Fn＋1 将带鼠标切到 Windows")
+            if state.armed and keyboard:
+                report("armed", f"监听就绪，等待 Fn＋{channel}")
             elif keyboard and mouse:
                 report("checking", "正在等待连接稳定")
+            elif state.armed:
+                report("checking", "检测到键盘离开，正在确认")
             else:
-                report("waiting", "正在等待键盘和鼠标回到 Mac 通道 2")
+                missing = "键盘" if mouse else ("鼠标" if keyboard else "键盘和鼠标")
+                report("waiting", f"等待{missing}连接 {local_name}")
             if trigger:
                 if dry_run:
                     LOG.info("DRY RUN: would switch mouse to channel %s", channel)
@@ -208,9 +215,12 @@ def watch(channel, dry_run, stop_event=None, pause_event=None, on_status=None):
                     # Recheck to avoid acting on a keyboard that already returned.
                     if not inventory()[0] and not (pause_event and pause_event.is_set()) \
                             and not (stop_event and stop_event.is_set()):
-                        report("switching", "正在将鼠标切到 Windows 通道 1")
-                        switch_once(channel)
-                        report("waiting", "已请求切到 Windows；等待设备返回 Mac")
+                        report("switching", f"正在将鼠标切到 {target_name} 通道 {channel}")
+                        # Use the mouse interface just observed at the moment of
+                        # departure. Re-enumerating here can briefly lose a valid
+                        # Bluetooth HID path while the keyboard is switching.
+                        switch_once(channel, mouse)
+                        report("waiting", f"已请求切到 {target_name}；等待设备返回 {local_name}")
         except Exception as exc:
             # Unknown enumeration/transport state must never mean 'keyboard left'.
             state.reset()

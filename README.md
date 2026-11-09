@@ -1,6 +1,6 @@
 # OG80 与 MX Master 3S 双机联动（待硬件验证）
 
-**Mac 菜单栏版已安装并实测成功。** Mac 现可后台运行、显示状态图标并在用户登录后自动启动，无需保持终端窗口。日常操作、权限、更新与停用见 [MAC_BACKGROUND.md](MAC_BACKGROUND.md)。下文的窗口运行方式仍可用于诊断，以及尚未安装菜单栏版的电脑。Windows 端仍需单独完成配置与测试。
+**Mac 菜单栏版已安装并实测成功。** Mac 现可后台运行、显示状态图标并在用户登录后自动启动，无需保持终端窗口。日常操作、权限、更新与停用见 [MAC_BACKGROUND.md](MAC_BACKGROUND.md)。Windows 现提供通知区域后台版与登录启动安装器；首次仍应先完成预览测试。
 
 通道固定为 Windows=1、Mac=2。Mac 监听 OG80 离开，通知鼠标切到 1；Windows 监听 OG80 离开，通知鼠标切到 2。
 
@@ -22,7 +22,7 @@ Mac 的 Python 和依赖已经放在当前工作目录，移动本目录或其�
 
 将本 `mouse-follow` 文件夹复制到 Windows，放在长期保留的位置。需要 Python 3.10 或以上，`py` 或 `python` 命令可用。先双击 `Windows-Setup.cmd` 创建本地虚拟环境、下载固定版本 hidapi、执行只读诊断。正常应显示 `og80_present: true`、`mx_master_3s_present: true`、`current_channel: 1`。
 
-先用 `Windows-Preview.cmd` 验证离开检测（Fn+2），通过后用 `Windows-Start.cmd` 启动实际联动。无需管理员运行。此实现只匹配蓝牙直连、产品 ID 为 B034 的 MX Master 3S；如果 Windows 暴露不同产品 ID / 设备名，需要先适配，不能盲目启动。
+先用 `Windows-Preview.cmd` 验证离开检测（Fn+2）。通过后双击 `Windows-Start.cmd`，程序会在通知区域后台运行；右键其图标可查看状态、暂停/恢复、打开日志或退出。双击 `Windows-Install-Background.cmd` 会在当前用户的 Windows“启动”文件夹中登记登录后自动启动，并立即启动程序；不需要管理员权限。登录启动依赖本项目目录保持原位置，若移动项目目录，请重新运行安装器。此实现只匹配蓝牙直连、产品 ID 为 B034 的 MX Master 3S；如果 Windows 暴露不同产品 ID / 设备名，需要先适配，不能盲目启动。
 
 ## 行为与边界
 
@@ -34,7 +34,7 @@ Mac 的 Python 和依赖已经放在当前工作目录，移动本目录或其�
 - 鼠标必须仍连接、可访问，且目标通道已经配对。鼠标休眠或通信失败可能需要手动按鼠标底部按钮。本版本失败会记录日志并取消本次动作，不持续重试。
 - 鼠标离开本机只能确认发送后本地断开，不能证明它已经成功连接到目标电脑。
 - 两台电脑都运行后才能双向自动切换；Windows 未运行时只能由 Mac 单向切出。
-- 日志写在 `follow.log`；不要同时开多个 watcher。
+- 终端版日志写在 `follow.log`；后台版日志写在 `%LOCALAPPDATA%\MouseFollow\follow.log`。不要同时开多个 watcher。
 
 ## 实现参考
 

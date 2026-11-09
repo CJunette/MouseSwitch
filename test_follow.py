@@ -61,6 +61,18 @@ class WatchTests(unittest.TestCase):
         self.assertTrue(state.update(5.5, False, True))
         self.assertFalse(state.update(6, False, True))
 
+    def test_watcher_uses_the_mouse_found_at_departure(self):
+        mouse_info = {"path": b"test"}
+        state = unittest.mock.MagicMock(seen_since=0, armed=False)
+        state.update.return_value = True
+        with patch("follow.WatchState", return_value=state), \
+                patch("follow.inventory", side_effect=[(True, mouse_info), (False, None)]), \
+                patch("follow.switch_once") as switch, \
+                patch("follow.time.sleep", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                watch(2, False)
+        switch.assert_called_once_with(2, mouse_info)
+
     def test_starting_absent_never_triggers(self):
         state = WatchState()
         for n in range(20):
