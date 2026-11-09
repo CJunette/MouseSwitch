@@ -11,6 +11,11 @@ STARTUP_FILE = STARTUP / "Mouse Follow.vbs"
 
 
 def launch_command():
+    if getattr(sys, "frozen", False):
+        return f'"{Path(sys.executable)}"'
+    application = ROOT / "MouseFollow.exe"
+    if application.is_file():
+        return f'"{application}"'
     pythonw = Path(sys.executable).with_name("pythonw.exe")
     if not pythonw.is_file():
         raise RuntimeError("pythonw.exe is missing from the project environment")

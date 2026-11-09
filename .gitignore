@@ -6,3 +6,6 @@ __pycache__/
 .DS_Store
 build/
 *.app/
+MouseFollow.exe
+mouse_follow.ico
+dist/

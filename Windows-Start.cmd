@@ -3,6 +3,11 @@ setlocal
 pushd "%~dp0"
 if errorlevel 1 goto folder_error
 if not exist "win_tray.py" goto files_missing
+if exist "MouseFollow.exe" (
+    echo Starting Mouse Follow...
+    start "Mouse Follow" /b "MouseFollow.exe"
+    goto end
+)
 if not exist ".venv\Scripts\python.exe" (
     echo Local Python environment not found. Running first-time setup...
     call "Windows-Setup.cmd"

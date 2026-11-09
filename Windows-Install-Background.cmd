@@ -14,7 +14,11 @@ if errorlevel 1 (
 )
 ".venv\Scripts\python.exe" install_windows.py --install
 if errorlevel 1 goto end
-start "Mouse Follow" /b ".venv\Scripts\pythonw.exe" win_tray.py
+if exist "MouseFollow.exe" (
+    start "Mouse Follow" /b "MouseFollow.exe"
+) else (
+    start "Mouse Follow" /b ".venv\Scripts\pythonw.exe" win_tray.py
+)
 echo Background startup is enabled. Look for Mouse Follow in the notification area.
 :end
 popd
