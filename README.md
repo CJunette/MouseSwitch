@@ -22,7 +22,7 @@ Mac 的 Python 和依赖已经放在当前工作目录，移动本目录或其�
 
 将本 `mouse-follow` 文件夹复制到 Windows，放在长期保留的位置。需要 Python 3.10 或以上，`py` 或 `python` 命令可用。先双击 `Windows-Setup.cmd` 创建本地虚拟环境、下载固定版本 hidapi、执行只读诊断。正常应显示 `og80_present: true`、`mx_master_3s_present: true`、`current_channel: 1`。
 
-先用 `Windows-Preview.cmd` 验证离开检测（Fn+2）。通过后双击 `Windows-Start.cmd`，程序会在通知区域后台运行；右键其图标可查看状态、暂停/恢复、打开日志或退出。双击 `Windows-Install-Background.cmd` 会在当前用户的 Windows“启动”文件夹中登记登录后自动启动，并立即启动程序；不需要管理员权限。登录启动依赖本项目目录保持原位置，若移动项目目录，请重新运行安装器。此实现只匹配蓝牙直连、产品 ID 为 B034 的 MX Master 3S；如果 Windows 暴露不同产品 ID / 设备名，需要先适配，不能盲目启动。
+先用 `Windows-Preview.cmd` 验证离开检测（Fn+2）。通过后双击 `Windows-Start.cmd`，程序会在通知区域后台运行；右键其图标可查看状态、暂停/恢复、打开日志或退出。状态窗口的“设备映射”可设置 `Fn+2` 对应的鼠标目标通道，保存后会重新开始监听。双击 `Windows-Install-Background.cmd` 会在当前用户的 Windows“启动”文件夹中登记登录后自动启动，并立即启动程序；不需要管理员权限。登录启动依赖本项目目录保持原位置，若移动项目目录，请重新运行安装器。此实现只匹配蓝牙直连、产品 ID 为 B034 的 MX Master 3S；如果 Windows 暴露不同产品 ID / 设备名，需要先适配，不能盲目启动。
 
 ## 行为与边界
 

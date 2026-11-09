@@ -153,7 +153,8 @@ def switch_once(channel, info=None):
 
 
 def watch(channel, dry_run, stop_event=None, pause_event=None, on_status=None,
-          local_name="Mac", local_channel=2, target_name="Windows", on_presence=None):
+          local_name="Mac", local_channel=2, target_name="Windows", on_presence=None,
+          trigger_label=None):
     state = WatchState()
     last_presence = None
     last_status = None
@@ -200,7 +201,7 @@ def watch(channel, dry_run, stop_event=None, pause_event=None, on_status=None,
             if state.armed and not was_armed:
                 LOG.info("Armed: keyboard and mouse both present")
             if state.armed and keyboard:
-                report("armed", f"监听就绪，等待 Fn＋{channel}")
+                report("armed", f"监听就绪，等待 {trigger_label or f'Fn＋{channel}'}")
             elif keyboard and mouse:
                 report("checking", "正在等待连接稳定")
             elif state.armed:
