@@ -16,6 +16,8 @@ from AppKit import (NSApplication, NSApplicationActivationPolicyAccessory, NSIma
                     NSWorkspace)
 from Foundation import NSObject, NSTimer, NSURL, NSMakeSize
 from follow import watch
+from i18n import status as status_text
+from i18n import text
 
 LABEL = "local.changliu.mouse-follow"
 DATA = Path.home() / "Library" / "Application Support" / "MouseFollow"
@@ -75,26 +77,27 @@ class MenuApp(NSObject):
         self.worker_generation = 0
         self.item = NSStatusBar.systemStatusBar().statusItemWithLength_(NSVariableStatusItemLength)
         image = NSImage.imageWithSystemSymbolName_accessibilityDescription_(
-            "computermouse", "键鼠联动")
+            "computermouse", "Mouse Follow")
         if image:
             image.setSize_(NSMakeSize(18, 18))
             image.setTemplate_(True)
             self.item.button().setImage_(image)
         self.menu = NSMenu.alloc().init()
-        self.status = self.add_item("正在启动…", None)
+        self.status = self.add_item(text("正在启动…", "Starting…"), None)
         self.status.setEnabled_(False)
-        self.mapping_menu = NSMenu.alloc().initWithTitle_("设备映射")
-        self.mapping_item = self.add_item("设备映射", None)
+        self.mapping_menu = NSMenu.alloc().initWithTitle_(text("设备映射", "Device mapping"))
+        self.mapping_item = self.add_item(text("设备映射", "Device mapping"), None)
         self.mapping_item.setSubmenu_(self.mapping_menu)
         self.rebuild_mapping_menu()
         self.menu.addItem_(NSMenuItem.separatorItem())
-        self.pause_item = self.add_item("暂停联动", "togglePause:")
-        self.startup_item = self.add_item("登录时自动启动", "toggleStartup:")
+        self.pause_item = self.add_item(text("暂停联动", "Pause switching"), "togglePause:")
+        self.startup_item = self.add_item(text("登录时自动启动", "Launch at login"), "toggleStartup:")
         self.startup_item.setState_(1 if startup_enabled() else 0)
-        self.add_item("打开运行日志", "openLog:")
-        self.add_item("打开输入监控设置", "openPermissions:")
+        self.add_item(text("打开运行日志", "Open log"), "openLog:")
+        self.add_item(text("打开输入监控设置", "Open Input Monitoring settings"), "openPermissions:")
         self.menu.addItem_(NSMenuItem.separatorItem())
-        self.add_item("退出（下次登录仍可自动启动）", "quit:")
+        self.add_item(text("退出（下次登录仍可自动启动）",
+                           "Quit (will start again at next login)"), "quit:")
         self.item.setMenu_(self.menu)
         self.timer = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
             0.5, self, "refresh:", None, True)
@@ -108,12 +111,12 @@ class MenuApp(NSObject):
     def rebuild_mapping_menu(self):
         self.mapping_menu.removeAllItems()
         title = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
-            "键盘 Fn＋1 → 鼠标通道", None, "")
+            text("键盘 Fn＋1 → 鼠标通道", "Keyboard Fn+1 → Mouse channel"), None, "")
         title.setEnabled_(False)
         self.mapping_menu.addItem_(title)
         for channel in (1, 2, 3):
             item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
-                f"鼠标通道 {channel}", "setMapping:", "")
+                text(f"鼠标通道 {channel}", f"Mouse channel {channel}"), "setMapping:", "")
             item.setTarget_(self)
             item.setTag_(channel)
             item.setState_(1 if channel == self.mapping["mouse_destination_channel"] else 0)
@@ -122,14 +125,16 @@ class MenuApp(NSObject):
     def run_watcher(self, mapping, generation, stop_event):
         while not CORE_GRAPHICS.CGPreflightListenEventAccess():
             if generation == self.worker_generation:
-                self.events.put(("error", "请在输入监控中允许 Mouse Follow，然后重新打开程序"))
+                self.events.put(("error", text("请在输入监控中允许 Mouse Follow，然后重新打开程序",
+                                                 "Allow Mouse Follow in Input Monitoring, then reopen it")))
             if stop_event.wait(2):
                 return
         watch(mapping["mouse_destination_channel"], False, stop_event=stop_event,
               pause_event=self.pause_event, local_name="MacBook", local_channel=2,
               target_name="Windows",
-              trigger_label=(f"键盘 Fn＋1 → 鼠标通道 "
-                             f"{mapping['mouse_destination_channel']}"),
+            trigger_label=text(f"键盘 Fn＋1 → 鼠标通道 {mapping['mouse_destination_channel']}",
+                               f"keyboard Fn+1 → mouse channel "
+                               f"{mapping['mouse_destination_channel']}"),
               on_status=lambda kind, message: generation == self.worker_generation
               and self.events.put((kind, message)))
 
@@ -169,17 +174,18 @@ class MenuApp(NSObject):
             marker = {"armed": "✓", "paused": "Ⅱ", "error": "!",
                       "waiting": "…", "checking": "…", "switching": "↔"}[kind]
             self.item.button().setTitle_(marker)
-            self.item.button().setToolTip_("键鼠联动：" + message)
-            self.status.setTitle_(message[:100])
+            display = status_text(kind, message, self.mapping["mouse_destination_channel"])
+            self.item.button().setToolTip_("Mouse Follow: " + display)
+            self.status.setTitle_(display[:100])
             logging.info("Menu status: %s — %s", kind, message)
 
     def togglePause_(self, sender):
         if self.pause_event.is_set():
             self.pause_event.clear()
-            sender.setTitle_("暂停联动")
+            sender.setTitle_(text("暂停联动", "Pause switching"))
         else:
             self.pause_event.set()
-            sender.setTitle_("恢复联动")
+            sender.setTitle_(text("恢复联动", "Resume switching"))
 
     def setMapping_(self, sender):
         try:
@@ -187,10 +193,11 @@ class MenuApp(NSObject):
             save_mapping(self.mapping)
         except (OSError, ValueError) as exc:
             logging.exception("Cannot save mapping")
-            self.events.put(("error", "无法保存映射：" + str(exc)))
+            self.events.put(("error", text("无法保存映射：", "Could not save mapping: ") + str(exc)))
             return
         self.rebuild_mapping_menu()
-        self.events.put(("checking", "已保存映射，正在重新开始监听"))
+        self.events.put(("checking", text("已保存映射，正在重新开始监听",
+                                           "Mapping saved; restarting watcher")))
         threading.Thread(target=self.restart_watcher, daemon=True).start()
 
     def toggleStartup_(self, sender):
@@ -203,7 +210,7 @@ class MenuApp(NSObject):
             sender.setState_(1 if startup_enabled() else 0)
         except Exception as exc:
             logging.exception("Cannot update login startup")
-            self.events.put(("error", "无法更新自动启动：" + str(exc)))
+            self.events.put(("error", text("无法更新自动启动：", "Could not update launch at login: ") + str(exc)))
 
     def openLog_(self, sender):
         NSWorkspace.sharedWorkspace().openURL_(NSURL.fileURLWithPath_(str(LOG_FILE)))

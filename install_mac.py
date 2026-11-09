@@ -45,7 +45,7 @@ def build():
     destination = resources / "runtime" / "lib" / "python3.12" / "site-packages"
     shutil.copytree(Path(sysconfig.get_path("purelib")), destination, dirs_exist_ok=True,
                     symlinks=True)
-    for name in ("follow.py", "mac_menubar.py"):
+    for name in ("follow.py", "i18n.py", "mac_menubar.py"):
         shutil.copy2(ROOT / name, resources / name)
     executable.write_text('#!/bin/zsh\nAPP_RES="${0:A:h:h}/Resources"\n'
                           'unset PYTHONHOME PYTHONPATH\n'

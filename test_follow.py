@@ -122,5 +122,18 @@ class MacMappingTests(unittest.TestCase):
             self.assertEqual(load_mapping(path), {"mouse_destination_channel": 2})
 
 
+class TranslationTests(unittest.TestCase):
+    def test_english_status_is_available(self):
+        from i18n import status
+        with patch.dict("os.environ", {"LANG": "en_US.UTF-8"}, clear=False):
+            self.assertEqual(status("armed", destination_channel=1),
+                             "Ready: mouse will switch to channel 1")
+
+    def test_chinese_status_is_available(self):
+        from i18n import status
+        with patch.dict("os.environ", {"LANG": "zh_CN.UTF-8"}, clear=False):
+            self.assertIn("监听就绪", status("armed", destination_channel=1))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,76 @@
+name: Release applications
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to publish
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements-windows-build.txt
+      - run: python build_windows.py
+      - name: Package Windows application
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release\windows | Out-Null
+          Copy-Item MouseFollow.exe release\windows\MouseFollow.exe
+          Copy-Item README.md release\windows\README.md
+          Compress-Archive -Path release\windows\* -DestinationPath MouseFollow-Windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: MouseFollow-Windows.zip
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements-mac.txt pyinstaller
+      - name: Build menu-bar application
+        run: |
+          python -m PyInstaller --noconfirm --clean --windowed --name "Mouse Follow" \
+            --collect-submodules hid \
+            --workpath build/pyinstaller --specpath build/pyinstaller \
+            --distpath dist mac_menubar.py
+      - name: Package macOS application
+        run: |
+          mkdir -p release/macos
+          ditto dist/"Mouse Follow.app" release/macos/"Mouse Follow.app"
+          chmod +x release/macos/Install.command
+          ditto -c -k --sequesterRsrc --keepParent release/macos MouseFollow-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-release
+          path: MouseFollow-macOS.zip
+
+  publish:
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          generate_release_notes: true
+          files: release-assets/*

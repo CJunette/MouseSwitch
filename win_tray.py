@@ -14,6 +14,8 @@ from PIL import Image, ImageDraw, ImageTk
 import pystray
 
 from follow import watch
+from i18n import status as localized_status
+from i18n import text
 from install_windows import set_startup, startup_enabled
 
 APP_NAME = "Mouse Follow"
@@ -79,13 +81,13 @@ class TrayApp:
         self.show_event = threading.Event()
         self.pause_event = threading.Event()
         self.status_kind = "checking"
-        self.status_message = "正在启动…"
+        self.status_message = text("正在启动…", "Starting…")
         self.status_lock = threading.Lock()
         self.observation = None
         self.mapping = load_mapping()
         self.worker = None
         self.worker_generation = 0
-        self.mapping_message = "当前映射已加载"
+        self.mapping_message = text("当前映射已加载", "Current mapping loaded")
         self.mutex = ctypes.windll.kernel32.CreateMutexW(None, True, "MouseFollowTray")
         if ctypes.windll.kernel32.GetLastError() == 183:
             raise RuntimeError("Mouse Follow is already running")
@@ -94,23 +96,26 @@ class TrayApp:
 
     def menu(self):
         return pystray.Menu(
-            pystray.MenuItem("打开状态窗口", lambda: self.show_event.set(), default=True),
+            pystray.MenuItem(text("打开状态窗口", "Open status window"),
+                             lambda: self.show_event.set(), default=True),
             pystray.MenuItem(self.status_text, None, enabled=False),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(self.pause_text, self.toggle_pause),
-            pystray.MenuItem("登录后自动启动", self.toggle_startup,
+            pystray.MenuItem(text("登录后自动启动", "Launch at login"), self.toggle_startup,
                              checked=lambda _: startup_enabled()),
-            pystray.MenuItem("打开运行日志", self.open_log),
+            pystray.MenuItem(text("打开运行日志", "Open log"), self.open_log),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("退出", self.quit),
+            pystray.MenuItem(text("退出", "Quit"), self.quit),
         )
 
     def status_text(self, _):
         with self.status_lock:
-            return "状态：" + self.status_message
+            return text("状态：", "Status: ") + localized_status(
+                self.status_kind, self.status_message, self.mapping["mouse_destination_channel"])
 
     def pause_text(self, _):
-        return "恢复联动" if self.pause_event.is_set() else "暂停联动"
+        return text("恢复联动", "Resume switching") if self.pause_event.is_set() \
+            else text("暂停联动", "Pause switching")
 
     def report(self, kind, message):
         with self.status_lock:
@@ -124,16 +129,19 @@ class TrayApp:
         with self.status_lock:
             sample = self.observation
         if self.pause_event.is_set():
-            return "已暂停检测"
+            return text("已暂停检测", "Detection is paused")
         if sample is None or time.monotonic() - sample[2] > 4:
-            return "等待最新设备读数…"
+            return text("等待最新设备读数…", "Waiting for device status…")
         def location(present):
-            return "已连接 Windows" if present else "Windows 未检测到"
-        return f"鼠标：{location(sample[1])}\n键盘：{location(sample[0])}"
+            return text("已连接 Windows", "Connected to Windows") if present else \
+                text("Windows 未检测到", "Not detected on Windows")
+        return text(f"鼠标：{location(sample[1])}\n键盘：{location(sample[0])}",
+                    f"Mouse: {location(sample[1])}\nKeyboard: {location(sample[0])}")
 
     def update_tray(self, kind, message):
         self.icon.icon = make_icon(STATUS_COLORS.get(kind, STATUS_COLORS["checking"]))
-        self.icon.title = APP_NAME + " — " + message
+        self.icon.title = APP_NAME + " — " + localized_status(
+            kind, message, self.mapping["mouse_destination_channel"])
         self.icon.update_menu()
 
     def run_watcher(self, mapping, generation, stop_event):
@@ -149,7 +157,9 @@ class TrayApp:
               pause_event=self.pause_event, on_status=report, local_name="Windows",
               local_channel=1, target_name="Mac",
               on_presence=observed,
-              trigger_label=f"键盘 Fn＋2 → 鼠标通道 {mapping['mouse_destination_channel']}")
+              trigger_label=text(f"键盘 Fn＋2 → 鼠标通道 {mapping['mouse_destination_channel']}",
+                                 f"keyboard Fn+2 → mouse channel "
+                                 f"{mapping['mouse_destination_channel']}"))
 
     def start_watcher(self):
         self.worker_generation += 1
@@ -163,7 +173,9 @@ class TrayApp:
     def setup(self, icon):
         icon.visible = True
         self.start_watcher()
-        self.icon.notify("已在通知区域后台运行。右键图标可查看状态或退出。", APP_NAME)
+        self.icon.notify(text("已在通知区域后台运行。右键图标可查看状态或退出。",
+                              "Running in the notification area. Right-click for status or quit."),
+                         APP_NAME)
         logging.info("Windows notification-area application started")
 
     def toggle_pause(self, icon, item):
@@ -183,7 +195,8 @@ class TrayApp:
             self.mapping_message = str(exc)
             return
         self.mapping = mapping
-        self.mapping_message = "已保存映射，正在重新开始监听"
+        self.mapping_message = text("已保存映射，正在重新开始监听",
+                                    "Mapping saved; restarting watcher")
         threading.Thread(target=self.restart_watcher, name="MouseFollowRestart", daemon=True).start()
 
     def restart_watcher(self):
@@ -200,7 +213,7 @@ class TrayApp:
             self.icon.update_menu()
         except Exception as exc:
             logging.exception("Cannot update login startup")
-            self.report("error", "无法更新登录启动：" + str(exc))
+            self.report("error", text("无法更新登录启动：", "Could not update launch at login: ") + str(exc))
 
     def open_log(self, icon, item):
         LOG_FILE.touch(exist_ok=True)
@@ -213,30 +226,33 @@ class TrayApp:
 
     def run(self):
         window = tk.Tk()
-        window.title("Mouse Follow · 键鼠联动")
+        window.title(text("Mouse Follow · 键鼠联动", "Mouse Follow · Device switching"))
         self.window_icon = ImageTk.PhotoImage(make_icon(STATUS_COLORS["checking"]))
         window.iconphoto(True, self.window_icon)
         panel = ttk.Frame(window, padding=18)
         panel.pack(fill="both", expand=True)
         devices = ttk.Label(panel)
         devices.pack(anchor="w", pady=(0, 8))
-        status = ttk.Label(panel, text="正在启动…", wraplength=360)
+        status = ttk.Label(panel, text=text("正在启动…", "Starting…"), wraplength=360)
         status.pack(anchor="w", pady=(0, 14))
-        mapping_box = ttk.LabelFrame(panel, text="设备映射", padding=10)
+        mapping_box = ttk.LabelFrame(panel, text=text("设备映射", "Device mapping"), padding=10)
         mapping_box.pack(fill="x", pady=(0, 12))
         mouse_value = tk.StringVar(value=str(self.mapping["mouse_destination_channel"]))
         choices = ("1", "2", "3")
-        ttk.Label(mapping_box, text="键盘 Fn＋2 → 鼠标通道").grid(row=0, column=0, sticky="w")
+        ttk.Label(mapping_box, text=text("键盘 Fn＋2 → 鼠标通道",
+                                         "Keyboard Fn+2 → Mouse channel")).grid(
+                                             row=0, column=0, sticky="w")
         ttk.Combobox(mapping_box, textvariable=mouse_value, values=choices,
                      state="readonly", width=5).grid(row=0, column=1, padx=(8, 0))
-        ttk.Button(mapping_box, text="保存映射",
+        ttk.Button(mapping_box, text=text("保存映射", "Save mapping"),
                    command=lambda: self.apply_mapping(mouse_value)).grid(
                        row=1, column=0, columnspan=2, sticky="w", pady=(10, 0))
         mapping_status = ttk.Label(mapping_box, wraplength=360)
         mapping_status.grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
         pause = ttk.Button(panel, command=lambda: self.toggle_pause(None, None))
         pause.pack(side="left")
-        ttk.Button(panel, text="隐藏到托盘", command=window.withdraw).pack(side="left", padx=8)
+        ttk.Button(panel, text=text("隐藏到托盘", "Hide to tray"), command=window.withdraw).pack(
+            side="left", padx=8)
         window.protocol("WM_DELETE_WINDOW", window.withdraw)
         rendered = None
         def refresh():
@@ -251,7 +267,9 @@ class TrayApp:
             devices.configure(text=self.device_text())
             with self.status_lock:
                 current = self.status_kind, self.status_message
-            status.configure(text="状态：" + current[1])
+            status.configure(text=text("状态：", "Status: ") +
+                           localized_status(current[0], current[1],
+                                            self.mapping["mouse_destination_channel"]))
             mapping_status.configure(text=self.mapping_message)
             pause.configure(text=self.pause_text(None))
             window.after(250, refresh)
