@@ -151,12 +151,25 @@ def switch_once(channel):
     raise RuntimeError("Mouse still enumerates here; switch is UNCONFIRMED")
 
 
-def watch(channel, dry_run):
+def watch(channel, dry_run, stop_event=None, pause_event=None, on_status=None):
     state = WatchState()
     last_presence = None
+    last_status = None
+
+    def report(kind, message):
+        nonlocal last_status
+        if (kind, message) != last_status and on_status:
+            on_status(kind, message)
+        last_status = (kind, message)
+
     LOG.info("Watching OG80 departure -> mouse channel %s; dry-run=%s", channel, dry_run)
-    while True:
+    while not (stop_event and stop_event.is_set()):
         try:
+            if pause_event and pause_event.is_set():
+                state.reset()
+                report("paused", "已暂停联动")
+                time.sleep(0.5)
+                continue
             keyboard, mouse = inventory()
             presence = (keyboard, mouse is not None)
             if presence != last_presence:
@@ -168,6 +181,7 @@ def watch(channel, dry_run):
             # Verify permission and protocol while both devices are here, rather
             # than waiting to discover an access problem when the keyboard leaves.
             if keyboard and mouse and state.seen_since is None and not state.armed and not dry_run:
+                report("checking", "正在检查鼠标控制接口")
                 handle = Mouse(mouse)
                 try:
                     _, host_info = handle.info()
@@ -181,16 +195,26 @@ def watch(channel, dry_run):
             trigger = state.update(time.time(), keyboard, mouse is not None)
             if state.armed and not was_armed:
                 LOG.info("Armed: keyboard and mouse both present")
+            if state.armed:
+                report("armed", "监听就绪：Fn＋1 将带鼠标切到 Windows")
+            elif keyboard and mouse:
+                report("checking", "正在等待连接稳定")
+            else:
+                report("waiting", "正在等待键盘和鼠标回到 Mac 通道 2")
             if trigger:
                 if dry_run:
                     LOG.info("DRY RUN: would switch mouse to channel %s", channel)
                 else:
                     # Recheck to avoid acting on a keyboard that already returned.
-                    if not inventory()[0]:
+                    if not inventory()[0] and not (pause_event and pause_event.is_set()) \
+                            and not (stop_event and stop_event.is_set()):
+                        report("switching", "正在将鼠标切到 Windows 通道 1")
                         switch_once(channel)
-        except Exception:
+                        report("waiting", "已请求切到 Windows；等待设备返回 Mac")
+        except Exception as exc:
             # Unknown enumeration/transport state must never mean 'keyboard left'.
             state.reset()
+            report("error", str(exc))
             LOG.exception("Watcher paused this attempt; waiting for a fresh baseline")
             time.sleep(2)
         time.sleep(0.5)

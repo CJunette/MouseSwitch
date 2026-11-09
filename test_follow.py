@@ -1,9 +1,29 @@
 import unittest
 from unittest.mock import patch
+import threading
 from follow import WatchState, frame, reply_matches, watch
 
 
 class WatchTests(unittest.TestCase):
+    def test_pause_skips_hardware_and_reports_pause(self):
+        stop = threading.Event()
+        paused = threading.Event()
+        paused.set()
+        reports = []
+        with patch("follow.inventory") as inventory, \
+                patch("follow.time.sleep", side_effect=lambda _: stop.set()):
+            watch(1, False, stop_event=stop, pause_event=paused,
+                  on_status=lambda kind, message: reports.append(kind))
+        inventory.assert_not_called()
+        self.assertEqual(reports, ["paused"])
+
+    def test_stop_does_not_access_hardware(self):
+        stop = threading.Event()
+        stop.set()
+        with patch("follow.inventory") as inventory:
+            watch(1, False, stop_event=stop)
+        inventory.assert_not_called()
+
     def test_watcher_waits_for_missing_devices_then_checks_mouse(self):
         with patch("follow.inventory", side_effect=[(False, None), (True, {"path": b"test"}),
                                                     KeyboardInterrupt]), \

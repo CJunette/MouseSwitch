@@ -1,8 +1,10 @@
 # OG80 与 MX Master 3S 双机联动（待硬件验证）
 
+**Mac 菜单栏版已安装并实测成功。** Mac 现可后台运行、显示状态图标并在用户登录后自动启动，无需保持终端窗口。日常操作、权限、更新与停用见 [MAC_BACKGROUND.md](MAC_BACKGROUND.md)。下文的窗口运行方式仍可用于诊断，以及尚未安装菜单栏版的电脑。Windows 端仍需单独完成配置与测试。
+
 通道固定为 Windows=1、Mac=2。Mac 监听 OG80 离开，通知鼠标切到 1；Windows 监听 OG80 离开，通知鼠标切到 2。
 
-当前进度：Mac 已成功读取实际鼠标的 ChangeHost，feature index=10、host_count=3、current_channel=2。终端及获准的沙盒外诊断均已成功。Mac → Windows 联动已实测成功：用户按 Fn+1 后确认鼠标自动切到 Windows。Windows → Mac 尚未实测。未注册开机启动。尚不能把本目录视为已完成双向硬件验证的成品。
+当前进度：Mac 已成功读取实际鼠标的 ChangeHost，feature index=10、host_count=3、current_channel=2。Mac → Windows 在终端版和菜单栏后台版均已实测成功。Mac 已注册用户登录自动启动；Windows → Mac 尚未实测，不能视为已完成双向硬件验证。
 
 ## Mac 下一步
 
