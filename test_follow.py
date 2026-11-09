@@ -1,0 +1,78 @@
+import unittest
+from unittest.mock import patch
+from follow import WatchState, frame, reply_matches, watch
+
+
+class WatchTests(unittest.TestCase):
+    def test_watcher_waits_for_missing_devices_then_checks_mouse(self):
+        with patch("follow.inventory", side_effect=[(False, None), (True, {"path": b"test"}),
+                                                    KeyboardInterrupt]), \
+                patch("follow.time.sleep"), patch("follow.Mouse") as mouse:
+            mouse.return_value.info.return_value = (10, {"current_channel": 2, "host_count": 3})
+            with self.assertLogs("mouse-follow", level="INFO") as logs:
+                with self.assertRaises(KeyboardInterrupt):
+                    watch(1, False)
+            self.assertTrue(any("Waiting for BOTH" in line for line in logs.output))
+            mouse.assert_called_once()
+            mouse.return_value.close.assert_called_once()
+            mouse.return_value.switch.assert_not_called()
+
+    def test_permission_failure_keeps_watcher_alive(self):
+        with patch("follow.inventory", side_effect=[(True, {"path": b"test"}),
+                                                    KeyboardInterrupt]) as inventory, \
+                patch("follow.time.sleep"), \
+                patch("follow.Mouse", side_effect=RuntimeError("Permission denied")):
+            with self.assertLogs("mouse-follow", level="ERROR"):
+                with self.assertRaises(KeyboardInterrupt):
+                    watch(1, False)
+            self.assertEqual(inventory.call_count, 2)
+
+    def armed(self):
+        state = WatchState()
+        for n in range(7):
+            self.assertFalse(state.update(n / 2, True, True))
+        self.assertTrue(state.armed)
+        return state
+
+    def test_departure_triggers_only_once(self):
+        state = self.armed()
+        self.assertFalse(state.update(3.5, False, True))
+        self.assertFalse(state.update(5, False, True))
+        self.assertTrue(state.update(5.5, False, True))
+        self.assertFalse(state.update(6, False, True))
+
+    def test_starting_absent_never_triggers(self):
+        state = WatchState()
+        for n in range(20):
+            self.assertFalse(state.update(n, False, True))
+
+    def test_short_dropout_does_not_trigger(self):
+        state = self.armed()
+        self.assertFalse(state.update(3.5, False, True))
+        self.assertFalse(state.update(4.5, True, True))
+        self.assertFalse(state.update(5, False, True))
+        self.assertFalse(state.update(6, False, True))
+
+    def test_sleep_requires_fresh_baseline(self):
+        state = self.armed()
+        self.assertFalse(state.update(100, False, True))
+        self.assertFalse(state.armed)
+
+    def test_mouse_leaving_disarms(self):
+        state = self.armed()
+        self.assertFalse(state.update(4, False, False))
+        self.assertFalse(state.update(5, False, True))
+        self.assertFalse(state.update(8, False, True))
+
+    def test_protocol_filters_unrelated_and_error_replies(self):
+        self.assertEqual(len(frame(7, 1, [0])), 20)
+        self.assertEqual(frame(7, 1, [0])[:5], bytes([17, 255, 7, 29, 0]))
+        self.assertTrue(reply_matches([17, 255, 0, 13, 7, 0, 0], 0, 0))
+        self.assertFalse(reply_matches([17, 255, 0, 14, 7, 0, 0], 0, 0))
+        self.assertFalse(reply_matches([17, 255, 0], 0, 0))
+        with self.assertRaises(RuntimeError):
+            reply_matches([17, 255, 255, 0, 13, 2, 0], 0, 0)
+
+
+if __name__ == "__main__":
+    unittest.main()
