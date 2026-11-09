@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import patch
 import threading
+import tempfile
+from pathlib import Path
 from follow import WatchState, frame, reply_matches, watch
 
 
@@ -104,6 +106,20 @@ class WatchTests(unittest.TestCase):
         self.assertFalse(reply_matches([17, 255, 0], 0, 0))
         with self.assertRaises(RuntimeError):
             reply_matches([17, 255, 255, 0, 13, 2, 0], 0, 0)
+
+
+class MacMappingTests(unittest.TestCase):
+    def test_mapping_validation_and_persistence(self):
+        from mac_menubar import load_mapping, save_mapping, validate_mapping
+        self.assertEqual(validate_mapping({}), {"mouse_destination_channel": 1})
+        self.assertEqual(validate_mapping({"mouse_destination_channel": "3"}),
+                         {"mouse_destination_channel": 3})
+        with self.assertRaises(ValueError):
+            validate_mapping({"mouse_destination_channel": 4})
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.json"
+            save_mapping({"mouse_destination_channel": 2}, path)
+            self.assertEqual(load_mapping(path), {"mouse_destination_channel": 2})
 
 
 if __name__ == "__main__":

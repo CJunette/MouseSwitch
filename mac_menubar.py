@@ -1,6 +1,7 @@
 """Native menu bar UI; all Cocoa calls stay on the main thread."""
 import fcntl
 import ctypes
+import json
 import logging
 from logging.handlers import RotatingFileHandler
 import os
@@ -20,9 +21,38 @@ LABEL = "local.changliu.mouse-follow"
 DATA = Path.home() / "Library" / "Application Support" / "MouseFollow"
 DATA.mkdir(parents=True, exist_ok=True)
 LOG_FILE = DATA / "follow.log"
+SETTINGS_FILE = DATA / "settings.json"
+DEFAULT_MAPPING = {
+    "mouse_destination_channel": 1,
+}
 CORE_GRAPHICS = ctypes.CDLL("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
 CORE_GRAPHICS.CGPreflightListenEventAccess.restype = ctypes.c_bool
 CORE_GRAPHICS.CGRequestListenEventAccess.restype = ctypes.c_bool
+
+
+def validate_mapping(mapping):
+    result = {}
+    for key, default in DEFAULT_MAPPING.items():
+        value = mapping.get(key, default)
+        try:
+            value = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("通道必须是 1、2 或 3") from exc
+        if value not in (1, 2, 3):
+            raise ValueError("通道必须是 1、2 或 3")
+        result[key] = value
+    return result
+
+
+def load_mapping(path=SETTINGS_FILE):
+    try:
+        return validate_mapping(json.loads(path.read_text(encoding="utf-8")))
+    except (OSError, ValueError, json.JSONDecodeError):
+        return DEFAULT_MAPPING.copy()
+
+
+def save_mapping(mapping, path=SETTINGS_FILE):
+    path.write_text(json.dumps(validate_mapping(mapping), indent=2), encoding="utf-8")
 
 
 def startup_enabled():
@@ -40,6 +70,9 @@ class MenuApp(NSObject):
         self.events = queue.Queue()
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
+        self.mapping = load_mapping()
+        self.worker = None
+        self.worker_generation = 0
         self.item = NSStatusBar.systemStatusBar().statusItemWithLength_(NSVariableStatusItemLength)
         image = NSImage.imageWithSystemSymbolName_accessibilityDescription_(
             "computermouse", "键鼠联动")
@@ -50,8 +83,10 @@ class MenuApp(NSObject):
         self.menu = NSMenu.alloc().init()
         self.status = self.add_item("正在启动…", None)
         self.status.setEnabled_(False)
-        mapping = self.add_item("Mac 通道 2 → Windows 通道 1", None)
-        mapping.setEnabled_(False)
+        self.mapping_menu = NSMenu.alloc().initWithTitle_("设备映射")
+        self.mapping_item = self.add_item("设备映射", None)
+        self.mapping_item.setSubmenu_(self.mapping_menu)
+        self.rebuild_mapping_menu()
         self.menu.addItem_(NSMenuItem.separatorItem())
         self.pause_item = self.add_item("暂停联动", "togglePause:")
         self.startup_item = self.add_item("登录时自动启动", "toggleStartup:")
@@ -67,17 +102,53 @@ class MenuApp(NSObject):
         # than an access error. Show the permission state instead of 'waiting'.
         if not CORE_GRAPHICS.CGPreflightListenEventAccess():
             CORE_GRAPHICS.CGRequestListenEventAccess()
-        self.worker = threading.Thread(target=self.run_watcher, daemon=True)
-        self.worker.start()
+        self.start_watcher()
         logging.info("Menu bar application started; no terminal window required")
 
-    def run_watcher(self):
+    def rebuild_mapping_menu(self):
+        self.mapping_menu.removeAllItems()
+        title = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "键盘 Fn＋1 → 鼠标通道", None, "")
+        title.setEnabled_(False)
+        self.mapping_menu.addItem_(title)
+        for channel in (1, 2, 3):
+            item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                f"鼠标通道 {channel}", "setMapping:", "")
+            item.setTarget_(self)
+            item.setTag_(channel)
+            item.setState_(1 if channel == self.mapping["mouse_destination_channel"] else 0)
+            self.mapping_menu.addItem_(item)
+
+    def run_watcher(self, mapping, generation, stop_event):
         while not CORE_GRAPHICS.CGPreflightListenEventAccess():
-            self.events.put(("error", "请在输入监控中允许 Mouse Follow，然后重新打开程序"))
-            if self.stop_event.wait(2):
+            if generation == self.worker_generation:
+                self.events.put(("error", "请在输入监控中允许 Mouse Follow，然后重新打开程序"))
+            if stop_event.wait(2):
                 return
-        watch(1, False, stop_event=self.stop_event, pause_event=self.pause_event,
-              on_status=lambda kind, message: self.events.put((kind, message)))
+        watch(mapping["mouse_destination_channel"], False, stop_event=stop_event,
+              pause_event=self.pause_event, local_name="MacBook", local_channel=2,
+              target_name="Windows",
+              trigger_label=(f"键盘 Fn＋1 → 鼠标通道 "
+                             f"{mapping['mouse_destination_channel']}"),
+              on_status=lambda kind, message: generation == self.worker_generation
+              and self.events.put((kind, message)))
+
+    def start_watcher(self):
+        self.worker_generation += 1
+        generation = self.worker_generation
+        self.stop_event = threading.Event()
+        self.worker = threading.Thread(target=self.run_watcher,
+                                       args=(self.mapping.copy(), generation, self.stop_event),
+                                       daemon=True)
+        self.worker.start()
+
+    def restart_watcher(self):
+        previous_stop = self.stop_event
+        previous_worker = self.worker
+        previous_stop.set()
+        if previous_worker:
+            previous_worker.join(timeout=4)
+        self.start_watcher()
 
     def add_item(self, title, action):
         item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(title, action, "")
@@ -110,6 +181,18 @@ class MenuApp(NSObject):
             self.pause_event.set()
             sender.setTitle_("恢复联动")
 
+    def setMapping_(self, sender):
+        try:
+            self.mapping = validate_mapping({"mouse_destination_channel": sender.tag()})
+            save_mapping(self.mapping)
+        except (OSError, ValueError) as exc:
+            logging.exception("Cannot save mapping")
+            self.events.put(("error", "无法保存映射：" + str(exc)))
+            return
+        self.rebuild_mapping_menu()
+        self.events.put(("checking", "已保存映射，正在重新开始监听"))
+        threading.Thread(target=self.restart_watcher, daemon=True).start()
+
     def toggleStartup_(self, sender):
         try:
             enable = not startup_enabled()
@@ -131,7 +214,8 @@ class MenuApp(NSObject):
 
     def quit_(self, sender):
         self.stop_event.set()
-        self.worker.join(timeout=8)
+        if self.worker:
+            self.worker.join(timeout=8)
         NSApplication.sharedApplication().terminate_(None)
 
 

@@ -2,7 +2,7 @@
 
 **Mac 菜单栏版已安装并实测成功。** Mac 现可后台运行、显示状态图标并在用户登录后自动启动，无需保持终端窗口。日常操作、权限、更新与停用见 [MAC_BACKGROUND.md](MAC_BACKGROUND.md)。Windows 现提供通知区域后台版与登录启动安装器；首次仍应先完成预览测试。
 
-通道固定为 Windows=1、Mac=2。Mac 监听 OG80 离开，通知鼠标切到 1；Windows 监听 OG80 离开，通知鼠标切到 2。
+默认映射为 Windows=1、Mac=2。Mac 菜单栏的“设备映射”可定义 `键盘 Fn＋1 → 鼠标通道`；Windows 状态窗口可定义 `键盘 Fn＋2 → 鼠标通道`。两台电脑的当前推荐映射仍分别为 1 与 2。
 
 当前进度：Mac 已成功读取实际鼠标的 ChangeHost，feature index=10、host_count=3、current_channel=2。Mac → Windows 在终端版和菜单栏后台版均已实测成功。Mac 已注册用户登录自动启动；Windows → Mac 尚未实测，不能视为已完成双向硬件验证。
 
