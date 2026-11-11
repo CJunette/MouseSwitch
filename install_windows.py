@@ -34,7 +34,7 @@ def set_startup(enabled):
         STARTUP.mkdir(parents=True, exist_ok=True)
         command = launch_command().replace('"', '""')
         STARTUP_FILE.write_text(
-            'CreateObject("WScript.Shell").Run "' + command + '", 0, False\r\n',
+            'CreateObject("WScript.Shell").Run "' + command + '", 1, False\r\n',
             encoding="utf-16")
     else:
         STARTUP_FILE.unlink(missing_ok=True)
